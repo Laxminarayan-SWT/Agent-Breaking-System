@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Break Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .hidden { display: none; }
+    label, select, input { display: block; margin: 10px 0; }
+    table, th, td { border: 1px solid black; border-collapse: collapse; padding: 5px; }
+    table { margin-top: 20px; width: 100%; }
+  </style>
+</head>
+<body>
+  <h2>Agent Break Tracker</h2>
+  <div id="loginDiv">
+    <label>Username: <input type="text" id="username"></label>
+    <label>Password: <input type="password" id="password"></label>
+    <button onclick="login()">Login</button>
+    <p id="loginMsg" style="color:red;"></p>
+  </div>
+
+  <div id="userDiv" class="hidden">
+    <h3>Welcome, <span id="loggedInUser"></span></h3>
+    <div id="breakForm">
+      <label>Break Type:
+        <select id="breakType">
+          <option value="Bio Break">Bio Break</option>
+          <option value="Tea Break">Tea Break</option>
+          <option value="Lunch Break">Lunch Break</option>
+        </select>
+      </label>
+      <button onclick="startBreak()">Start Break</button>
+    </div>
+    <div id="onBreakDiv" class="hidden">
+      <p>You are currently on a break: <span id="currentBreakInfo"></span></p>
+      <button onclick="endBreak()">End Break</button>
+    </div>
+    <p id="logMsg" style="color:green;"></p>
+
+    <div id="adminPanel" class="hidden">
+      <h3>Admin Panel</h3>
+      <button onclick="downloadExcel()">Download Excel (All Breaks)</button>
+      <button onclick="downloadBreakOnlyExcel()">Download Excel (Only Break Times)</button>
+      <table id="dataTable">
+        <thead>
+          <tr><th>Agent</th><th>Break Type</th><th>Start Time</th><th>End Time</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="userHistoryDiv">
+      <h3>Your Break History</h3>
+      <table id="userBreakTable">
+        <thead>
+          <tr><th>Break Type</th><th>Start Time</th><th>End Time</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const users = {
+      "Amogh": "pass1",
+      "Anushka": "pass2",
+      "Aditi": "pass3",
+      "Mohini": "pass4",
+      "Rohit R": "pass5",
+      "Aakriti": "pass6",
+      "Anjali": "pass7",
+      "Arindam": "pass8",
+      "Bhawna": "pass9",
+      "Deepanshi": "pass10",
+      "Megha": "pass11",
+      "Shivani": "pass12",
+      "Rohit": "pass13",
+      "Rupali": "pass14",
+      "Sanjiv": "pass15",
+      "Sanjeev": "pass16",
+      "Sonam": "pass17",
+      "Sandhya": "pass18",
+      "Rahul": "admin123"
+    };
+
+    let loggedInUser = "";
+    let breakLogs = JSON.parse(localStorage.getItem('breakLogs') || '[]');
+
+    function saveLogs() {
+      localStorage.setItem('breakLogs', JSON.stringify(breakLogs));
+    }
+
+    function login() {
+      const uname = document.getElementById("username").value.trim();
+      const pwd = document.getElementById("password").value;
+      const msg = document.getElementById("loginMsg");
+
+      if (users[uname] && users[uname] === pwd) {
+        loggedInUser = uname;
+        document.getElementById("loggedInUser").textContent = uname;
+        document.getElementById("loginDiv").classList.add("hidden");
+        document.getElementById("userDiv").classList.remove("hidden");
+        msg.textContent = "";
+        if (uname === "Rahul") {
+          document.getElementById("adminPanel").classList.remove("hidden");
+          document.getElementById("userHistoryDiv").classList.add("hidden");
+          setInterval(updateAllTables, 3000);
+        } else {
+          document.getElementById("adminPanel").classList.add("hidden");
+          document.getElementById("userHistoryDiv").classList.remove("hidden");
+        }
+        updateBreakUI();
+        updateAllTables();
+      } else {
+        msg.textContent = "Invalid username or password";
+      }
+    }
+
+    function startBreak() {
+      const type = document.getElementById("breakType").value;
+      const now = new Date().toLocaleString();
+      breakLogs.push({ name: loggedInUser, breakType: type, startTime: now, endTime: "" });
+      saveLogs();
+      document.getElementById("logMsg").textContent = `Break started at ${now}`;
+      updateAllTables();
+    }
+
+    function endBreak() {
+      const now = new Date().toLocaleString();
+      for (let i = breakLogs.length - 1; i >= 0; i--) {
+        if (breakLogs[i].name === loggedInUser && !breakLogs[i].endTime) {
+          breakLogs[i].endTime = now;
+          break;
+        }
+      }
+      saveLogs();
+      document.getElementById("logMsg").textContent = `Break ended at ${now}`;
+      updateAllTables();
+    }
+
+    function updateBreakUI() {
+      const ongoing = breakLogs.find(log => log.name === loggedInUser && !log.endTime);
+      if (ongoing) {
+        document.getElementById("breakForm").classList.add("hidden");
+        document.getElementById("onBreakDiv").classList.remove("hidden");
+        document.getElementById("currentBreakInfo").textContent = `${ongoing.breakType} since ${ongoing.startTime}`;
+      } else {
+        document.getElementById("breakForm").classList.remove("hidden");
+        document.getElementById("onBreakDiv").classList.add("hidden");
+      }
+    }
+
+    function updateAllTables() {
+      breakLogs = JSON.parse(localStorage.getItem('breakLogs') || '[]');
+      updateBreakUI();
+      if (loggedInUser !== "Rahul") {
+        updateUserBreakTable();
+      } else {
+        updateAdminTable();
+      }
+    }
+
+    function updateAdminTable() {
+      const tbody = document.querySelector("#dataTable tbody");
+      tbody.innerHTML = "";
+      breakLogs.forEach(log => {
+        const row = tbody.insertRow();
+        row.insertCell().textContent = log.name;
+        row.insertCell().textContent = log.breakType;
+        row.insertCell().textContent = log.startTime;
+        row.insertCell().textContent = log.endTime || "In Progress";
+      });
+    }
+
+    function updateUserBreakTable() {
+      const tbody = document.querySelector("#userBreakTable tbody");
+      tbody.innerHTML = "";
+      breakLogs.filter(log => log.name === loggedInUser).forEach(log => {
+        const row = tbody.insertRow();
+        row.insertCell().textContent = log.breakType;
+        row.insertCell().textContent = log.startTime;
+        row.insertCell().textContent = log.endTime || "In Progress";
+      });
+    }
+
+    function downloadExcel() {
+      const ws_data = [
+        ["Agent", "Break Type", "Start Time", "End Time"],
+        ...breakLogs.map(l => [l.name, l.breakType, l.startTime, l.endTime || ""])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "BreakLogs");
+      XLSX.writeFile(wb, "Agent_Breaks_All.xlsx");
+    }
+
+    function downloadBreakOnlyExcel() {
+      const ws_data = [
+        ["Agent", "Start Time", "End Time"],
+        ...breakLogs.map(l => [l.name, l.startTime, l.endTime || ""])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "OnlyTimes");
+      XLSX.writeFile(wb, "Break_Times_Only.xlsx");
+    }
+  </script>
+</body>
+</html>
